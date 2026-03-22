@@ -1,214 +1,351 @@
 # PaperPulse
 
-> 📜 论文监控、分析与创新 IDEA 推荐系统
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 功能特性
+> 📜 **Paper Monitoring, Analysis & Innovative IDEA Recommendation System**
 
-| 功能 | 描述 |
-|------|------|
-| 🔍 **多源监控** | arXiv、Semantic Scholar、Papers with Code |
-| 📥 **文档下载** | PDF 下载 + arXiv LaTeX 源码下载 |
-| 📄 **PDF 转换** | MinerU 转换 PDF → Markdown |
-| 🤖 **LLM 分析** | 自动提取关键词、创新点、局限性 |
-| 📈 **趋势分析** | 检测热门关键词和新兴方向 |
-| 💡 **IDEA 生成** | 基于多篇论文生成创新研究想法 |
-| 📝 **每日报告** | Markdown 报告 + Obsidian 笔记 |
-| ⏰ **定时任务** | 可配置的自动监控和报告 |
-| 🔗 **研究集成** | 一键启动 AutoResearchClaw 研究 |
+PaperPulse is an automated paper monitoring system that collects papers from multiple sources, analyzes them using LLM, detects trends, generates innovative research ideas, and integrates with your note-taking workflow.
 
-## 快速开始
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔍 **Multi-source Collection** | arXiv, Semantic Scholar, Papers with Code |
+| 📥 **Document Download** | PDF + arXiv LaTeX source code |
+| 📄 **PDF Conversion** | Convert PDFs to Markdown using MinerU |
+| 🤖 **LLM Analysis** | Extract keywords, innovations, and limitations |
+| 📈 **Trend Detection** | Identify trending keywords and emerging topics |
+| 💡 **IDEA Generation** | Generate innovative research ideas from papers |
+| 📝 **Daily Reports** | Markdown reports + Obsidian notes |
+| ⏰ **Scheduling** | Configurable automated monitoring |
+| 🔗 **Research Integration** | One-click launch AutoResearchClaw experiments |
+
+## 🚀 Quick Start
 
 ```bash
-# 1. 克隆项目
-cd /home/lishangli/repos/paperpulse
+# Clone the repository
+git clone https://github.com/yourusername/paperpulse.git
+cd paperpulse
 
-# 2. 创建虚拟环境
+# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 3. 安装依赖
+# Install dependencies
 pip install -e .
 
-# 4. 配置
+# Copy and configure
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，设置 OPENAI_API_KEY
+# Edit config.yaml and set your OPENAI_API_KEY
 
-# 5. 检查环境
+# Check environment
 paperpulse doctor
 
-# 6. 运行监控
+# Run monitoring
 paperpulse monitor
 ```
 
-## CLI 命令
+## 📋 CLI Commands
 
 ```bash
-# 监控论文 (一键执行全部流程)
+# Run full monitoring pipeline
 paperpulse monitor
 
-# 只收集论文
+# Collect papers only
 paperpulse collect --days 1 --limit 50
 
-# 下载文档 (PDF 和 LaTeX)
+# Download documents (PDF and LaTeX)
 paperpulse download 2301.00001
 
-# 转换 PDF → Markdown
+# Convert PDF to Markdown
 paperpulse convert 2301.00001
 
-# 分析论文
+# Analyze papers with LLM
 paperpulse analyze 2301.00001
 
-# 生成 IDEA
+# Generate research ideas
 paperpulse ideas --num 5
 
-# 查看趋势
+# View trending keywords
 paperpulse trends
 
-# 生成报告
+# Generate reports
 paperpulse report --daily
 
-# 同步到 Obsidian
+# Sync to Obsidian vault
 paperpulse obsidian
 
-# 启动 IDEA 研究
+# Start research for an idea
 paperpulse research idea-20260322-abc123
 
-# 查看数据库统计
+# Show database statistics
 paperpulse db
 
-# 环境检查
+# Environment check
 paperpulse doctor
+
+# Start daemon
+paperpulse daemon
 ```
 
-## 配置说明
+## ⚙️ Configuration
 
-### 数据源配置
+### Data Sources
 
 ```yaml
 sources:
   arxiv:
     enabled: true
     categories: [cs.AI, cs.CL, cs.LG, cs.CV, cs.NE]
+    keywords: []  # Optional filter keywords
     max_papers_per_day: 100
 
   semantic_scholar:
     enabled: true
     fields: ["Artificial Intelligence", "Machine Learning"]
+    max_papers_per_day: 50
 
   papers_with_code:
     enabled: true
     areas: [natural-language-processing, computer-vision]
+    max_papers_per_day: 30
 ```
 
-### arXiv 类别
+### arXiv Categories
 
-| 类别 | 领域 |
-|------|------|
-| cs.AI | 人工智能 |
-| cs.CL | 计算与语言 (NLP) |
-| cs.LG | 机器学习 |
-| cs.CV | 计算机视觉 |
-| cs.NE | 神经计算 |
-| cs.RO | 机器人 |
-| stat.ML | 统计机器学习 |
+| Category | Field |
+|----------|-------|
+| cs.AI | Artificial Intelligence |
+| cs.CL | Computation and Language (NLP) |
+| cs.LG | Machine Learning |
+| cs.CV | Computer Vision |
+| cs.NE | Neural Computing |
+| cs.RO | Robotics |
+| stat.ML | Statistics - Machine Learning |
 
-### 定时任务配置
+### Scheduler Configuration
 
 ```yaml
 scheduler:
   enabled: true
-  daily_monitor: "0 8 * * *"     # 每天 8:00
-  daily_report: "30 8 * * *"     # 每天 8:30
-  weekly_summary: "0 9 * * 1"    # 每周一 9:00
+  daily_monitor: "0 8 * * *"     # Daily at 8:00 AM
+  daily_report: "30 8 * * *"     # Daily at 8:30 AM
+  weekly_summary: "0 9 * * 1"    # Monday at 9:00 AM
 ```
 
-### Obsidian 集成
+### Obsidian Integration
 
 ```yaml
 obsidian:
   enabled: true
-  vault_path: "/path/to/your/vault"  # 或留空使用默认目录
+  vault_path: "/path/to/your/vault"  # Leave empty for default
   folders:
     papers: "Papers"
     ideas: "Ideas"
     daily: "Daily"
+    latex: "LaTeX"
 ```
 
-## 输出示例
+### LLM Configuration
 
-### 每日报告
+```yaml
+llm:
+  provider: openai
+  api_key_env: OPENAI_API_KEY
+  base_url: https://api.openai.com/v1
+  primary_model: gpt-4o
+  fallback_model: gpt-4o-mini
+```
+
+## 📊 Output Example
+
+### Daily Report
 
 ```markdown
-# 📜 PaperPulse 每日报告 - 2026-03-22
+# 📜 PaperPulse Daily Report - 2026-03-22
 
-> 🤖 发现 **47** 篇新论文 | 生成 **8** 个创新 IDEA
+> 🤖 Discovered **47** new papers | Generated **8** innovative ideas
 
-## 🔥 热门关键词
+## 🔥 Trending Keywords
 
-| 关键词 | 论文数 | 趋势 |
-|--------|--------|------|
+| Keyword | Papers | Trend |
+|---------|--------|-------|
 | Mixture of Experts | 12 | ↑ 156% |
 | Long Context | 9 | ↑ 89% |
+| Chain of Thought | 7 | ↑ 45% |
 
-## 💡 今日推荐 IDEA
+## 💡 Top Ideas Today
 
-### #1 [高价值] MoE + Long Context 的动态专家选择机制
+### #1 [High Value] Dynamic Expert Selection for MoE in Long Context
 
-**评分**: 0.86 ⭐⭐⭐⭐
+**Score**: 0.86 ⭐⭐⭐⭐
 
-**描述**: 当前 MoE 的专家选择在长文本中面临效率问题...
+**Description**: Current MoE expert selection faces efficiency challenges in long documents...
 ```
 
-## 与 AutoResearchClaw 联动
+## 🔗 AutoResearchClaw Integration
+
+PaperPulse integrates with [AutoResearchClaw](https://github.com/yourusername/AutoResearchClaw) to automatically run experiments for generated ideas:
 
 ```bash
-# 1. 查看 IDEA
+# View generated ideas
 paperpulse ideas
 
-# 2. 启动研究
+# Start research for an idea
 paperpulse research idea-20260322-abc123
 
-# 自动调用 AutoResearchClaw 生成论文
+# AutoResearchClaw will be invoked to generate a research paper
 ```
 
-## 依赖安装
+## 📁 Project Structure
 
-### 基础依赖
+```
+paperpulse/
+├── src/paperpulse/
+│   ├── cli.py              # CLI entry point
+│   ├── config.py           # Configuration management
+│   ├── collectors/         # Paper collection
+│   │   ├── arxiv.py        # arXiv + LaTeX download
+│   │   ├── semantic_scholar.py
+│   │   └── papers_with_code.py
+│   ├── downloader/         # Document download
+│   │   └── pdf.py          # PDF + LaTeX downloader
+│   ├── converter/          # PDF conversion
+│   │   └── mineru.py       # MinerU integration
+│   ├── storage/            # Data storage
+│   │   ├── models.py       # Data models
+│   │   └── database.py     # SQLite database
+│   ├── analysis/           # LLM analysis
+│   │   ├── llm_client.py   # OpenAI client
+│   │   ├── paper_analyzer.py
+│   │   └── trend_detector.py
+│   ├── ideas/              # Idea generation
+│   │   ├── generator.py
+│   │   └── scorer.py
+│   ├── output/             # Output generation
+│   │   ├── markdown.py     # Report generator
+│   │   └── obsidian.py     # Obsidian sync
+│   └── integration/        # External integrations
+│       ├── researchclaw.py # AutoResearchClaw
+│       └── scheduler.py    # Task scheduler
+├── data/                   # Local data storage
+│   ├── papers.db           # SQLite database
+│   ├── pdfs/               # PDF files
+│   ├── latex/              # LaTeX sources
+│   └── markdown/           # Converted markdown
+├── reports/                # Generated reports
+├── obsidian/               # Obsidian notes
+├── config.example.yaml     # Example configuration
+├── pyproject.toml          # Project metadata
+└── README.md
+```
+
+## 📦 Dependencies
+
+### Core Dependencies
 
 ```bash
 pip install -e .
 ```
 
-### MinerU (PDF 转 Markdown)
+This installs:
+- `arxiv` - arXiv API client
+- `openai` - OpenAI API client
+- `httpx` - HTTP client
+- `pydantic` - Data validation
+- `click` - CLI framework
+- `rich` - Terminal output
+- `pyyaml` - YAML parsing
+- `feedparser` - RSS parsing
+- `schedule` - Task scheduling
+
+### Optional: MinerU (PDF → Markdown)
+
+For high-quality PDF to Markdown conversion:
 
 ```bash
 pip install mineru[all]
 ```
 
-## 项目结构
+MinerU is optimized for academic papers and supports:
+- Mathematical formulas
+- Tables
+- Figures
+- Multi-column layouts
+- Chinese text
 
-```
-paperpulse/
-├── src/paperpulse/
-│   ├── cli.py              # CLI 入口
-│   ├── config.py           # 配置管理
-│   ├── collectors/         # 论文采集
-│   ├── downloader/         # 文档下载
-│   ├── converter/          # PDF 转换
-│   ├── storage/            # 数据存储
-│   ├── analysis/           # LLM 分析
-│   ├── ideas/              # IDEA 生成
-│   ├── output/             # 报告输出
-│   └── integration/        # 第三方集成
-├── data/                   # 本地数据
-│   ├── papers.db           # SQLite 数据库
-│   ├── pdfs/               # PDF 文件
-│   ├── latex/              # LaTeX 源码
-│   └── markdown/           # Markdown 转换结果
-├── reports/                # 报告输出
-└── obsidian/               # Obsidian 笔记
+## 🔧 Advanced Usage
+
+### Custom Collection Query
+
+```bash
+# Collect from specific arXiv categories
+paperpulse collect --categories cs.AI,cs.LG --limit 100
+
+# Collect from specific date range
+paperpulse collect --days 7
 ```
 
-## License
+### Batch Processing
 
-MIT
+```python
+from paperpulse.config import load_config
+from paperpulse.storage.database import Database
+from paperpulse.collectors.arxiv import ArxivCollector
+from paperpulse.analysis.llm_client import create_llm_client
+from paperpulse.analysis.paper_analyzer import PaperAnalyzer
+
+config = load_config()
+db = Database(config.storage.database)
+
+# Collect
+collector = ArxivCollector(categories=["cs.CL", "cs.AI"])
+papers = collector.collect()
+db.insert_papers(papers)
+
+# Analyze
+llm = create_llm_client(config.llm)
+analyzer = PaperAnalyzer(llm, db)
+for paper in papers:
+    analyzer.analyze_paper(paper)
+```
+
+### Obsidian Templates
+
+PaperPulse creates structured Obsidian notes with:
+
+- Paper metadata (arXiv ID, DOI, authors, date)
+- Abstract and key points
+- Extracted innovations and limitations
+- BibTeX citation
+- Links to PDF/LaTeX sources
+- Research command snippets
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [arXiv](https://arxiv.org/) for providing open access to papers
+- [Semantic Scholar](https://www.semanticscholar.org/) for their API
+- [Papers with Code](https://paperswithcode.com/) for linking papers to code
+- [MinerU](https://github.com/opendatalab/MinerU) for PDF parsing
+- [AutoResearchClaw](https://github.com/yourusername/AutoResearchClaw) for research automation
+
+---
+
+<p align="center">
+  Made with ❤️ by the PaperPulse Team
+</p>
