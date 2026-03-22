@@ -1,0 +1,1 @@
+"""Analysis module for paper analysis and trend detection."""

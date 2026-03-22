@@ -1,0 +1,137 @@
+# PaperPulse Configuration
+# Copy this file to config.yaml and customize
+
+project:
+  name: "paperpulse"
+  timezone: "Asia/Shanghai"
+  log_level: "INFO"
+
+# ========================================
+# Data Sources Configuration
+# ========================================
+sources:
+  arxiv:
+    enabled: true
+    categories:
+      - cs.AI
+      - cs.CL
+      - cs.LG
+      - cs.CV
+      - cs.NE
+    keywords: []
+    max_papers_per_day: 100
+  
+  semantic_scholar:
+    enabled: true
+    fields:
+      - "Artificial Intelligence"
+      - "Machine Learning"
+      - "Natural Language Processing"
+    max_papers_per_day: 50
+  
+  papers_with_code:
+    enabled: true
+    areas:
+      - natural-language-processing
+      - computer-vision
+      - machine-learning
+    max_papers_per_day: 50
+
+# ========================================
+# Document Acquisition
+# ========================================
+document:
+  prefer_latex_source: true
+  
+  pdf:
+    enabled: true
+    max_concurrent: 5
+    retry_count: 3
+    timeout_sec: 60
+    max_size_mb: 50
+  
+  converter:
+    backend: "mineru"
+    mineru:
+      output_format: "markdown"
+
+# ========================================
+# LLM Configuration
+# ========================================
+llm:
+  provider: "openai"
+  base_url: "https://api.openai.com/v1"
+  api_key_env: "OPENAI_API_KEY"
+  api_key: ""
+  primary_model: "gpt-4o"
+  fallback_model: "gpt-4o-mini"
+  temperature: 0.7
+  max_tokens: 4096
+
+# ========================================
+# Scheduler Configuration
+# ========================================
+scheduler:
+  enabled: true
+  daily_monitor: "0 8 * * *"
+  daily_report: "30 8 * * *"
+  weekly_summary: "0 9 * * 1"
+
+# ========================================
+# Obsidian Configuration
+# ========================================
+obsidian:
+  enabled: true
+  vault_path: ""
+  folders:
+    papers: "Papers"
+    ideas: "Ideas"
+    daily: "Daily"
+    latex: "LaTeX"
+
+# ========================================
+# Storage Configuration
+# ========================================
+storage:
+  database: "./data/papers.db"
+  pdf_dir: "./data/pdfs"
+  latex_dir: "./data/latex"
+  markdown_dir: "./data/markdown"
+  retention_days: 90
+
+# ========================================
+# Output Configuration
+# ========================================
+output:
+  reports_dir: "./reports"
+  formats:
+    - markdown
+    - json
+
+# ========================================
+# AutoResearchClaw Integration
+# ========================================
+integration:
+  researchclaw:
+    enabled: true
+    path: "/home/lishangli/repos/AutoResearchClaw"
+    venv_path: "/home/lishangli/repos/AutoResearchClaw/.venv"
+    config_template: "config.arc.yaml"
+    auto_run: false
+    require_confirmation: true
+
+# ========================================
+# IDEA Generation
+# ========================================
+ideas:
+  enabled: true
+  papers_per_idea: 5
+  max_ideas_per_day: 10
+  min_novelty_score: 0.6
+  
+  scoring:
+    novelty_weight: 0.30
+    feasibility_weight: 0.25
+    impact_weight: 0.20
+    evidence_weight: 0.15
+    timing_weight: 0.10
