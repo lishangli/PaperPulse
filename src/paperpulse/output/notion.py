@@ -178,27 +178,54 @@ class NotionSync:
                 # Create new page using data_source_id (not database_id)
                 # Generate slug from title (remove special chars, lowercase)
                 import re
+                from datetime import datetime
+                
                 slug_base = re.sub(r'[^a-zA-Z0-9\-]', '-', title.lower())[:50]
                 slug_base = re.sub(r'-+', '-', slug_base).strip('-')
+                
+                # Auto-detect category from title/content
+                category = "Research"  # Default
+                title_lower = title.lower()
+                if any(kw in title_lower for kw in ['ai', 'llm', 'agent', 'neural', 'deep', 'machine learning']):
+                    category = "AI"
+                elif any(kw in title_lower for kw in ['compiler', 'cgra', 'scheduling', 'optimization', 'hardware']):
+                    category = "Compiler"
+                elif any(kw in title_lower for kw in ['math', 'proof', 'equation', 'theorem', 'analysis']):
+                    category = "Math"
+                elif any(kw in title_lower for kw in ['system', 'os', 'infrastructure', 'distributed']):
+                    category = "System"
+                
+                # Extract tags from title (keywords)
+                tag_keywords = []
+                common_tags = ['AI', 'LLM', 'Agent', 'Compiler', 'CGRA', 'Scheduling', 
+                               'Optimization', 'Research', 'Survey', 'Benchmark', 'Math']
+                for tag in common_tags:
+                    if tag.lower() in title_lower:
+                        tag_keywords.append(tag)
+                if not tag_keywords:
+                    tag_keywords = ['Research']
+                
+                # Generate summary from content (first 200 chars)
+                summary = ""
+                for line in content.split('\n')[:20]:
+                    if line and not line.startswith('#') and len(line) > 50:
+                        summary = line[:200].strip()
+                        break
                 
                 create_data = {
                     "parent": {"data_source_id": ds_id_str},
                     "properties": {
                         "title": {
-                            "title": [
-                                {"text": {"content": title}}
-                            ]
+                            "title": [{"text": {"content": title}}]
                         },
                         # NotionNext required properties for blog posts
-                        "type": {
-                            "select": {"name": "Post"}
-                        },
-                        "status": {
-                            "select": {"name": "Published"}
-                        },
-                        "slug": {
-                            "rich_text": [{"text": {"content": slug_base}}]
-                        }
+                        "type": {"select": {"name": "Post"}},
+                        "status": {"select": {"name": "Published"}},
+                        "slug": {"rich_text": [{"text": {"content": slug_base}}]},
+                        "date": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},
+                        "category": {"select": {"name": category}},
+                        "tags": {"multi_select": [{"name": t} for t in tag_keywords[:5]]},
+                        "summary": {"rich_text": [{"text": {"content": summary[:150] if summary else title[:150]}}]}
                     }
                 }
                 
