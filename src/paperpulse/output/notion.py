@@ -331,6 +331,8 @@ class NotionSync:
         recursive: bool = False,
         target_page: Optional[str] = None,
         target_database: Optional[str] = None,
+        skip_existing: bool = True,  # Skip already synced files
+        sync_records_path: Optional[str] = None,  # Path to sync records file
     ) -> list[dict]:
         """Sync all Markdown files in a directory.
         
@@ -340,11 +342,29 @@ class NotionSync:
             recursive: Search recursively
             target_page: Override target page
             target_database: Override target database
+            skip_existing: Skip files that have already been synced
+            sync_records_path: Path to sync records JSON file
         
         Returns:
             List of results
         """
+        import json
+        from datetime import datetime
+        
         dir_path = Path(dir_path).resolve()
+        
+        # Load sync records
+        sync_records_file = Path(sync_records_path or "data/notion_sync_records.json")
+        sync_records = {}
+        if sync_records_file.exists():
+            try:
+                sync_records = json.loads(sync_records_file.read_text())
+            except Exception:
+                sync_records = {"synced_files": {}}
+        else:
+            sync_records = {"synced_files": {}}
+        
+        synced_files = sync_records.get("synced_files", {})
         
         # Find files
         if recursive:
@@ -356,10 +376,30 @@ class NotionSync:
             logger.warning(f"No files found in {dir_path} matching {pattern}")
             return []
         
+        # Filter already synced files if skip_existing
+        if skip_existing:
+            new_files = []
+            skipped_files = []
+            for f in files:
+                file_key = str(f.relative_to(dir_path))
+                if file_key in synced_files:
+                    skipped_files.append(f)
+                else:
+                    new_files.append(f)
+            
+            if skipped_files:
+                logger.info(f"Skipping {len(skipped_files)} already synced files")
+            
+            files = new_files
+        
+        if not files:
+            logger.info("All files already synced, nothing to do")
+            return []
+        
         results = []
         total = len(files)
         
-        logger.info(f"Syncing {total} files from {dir_path}")
+        logger.info(f"Syncing {total} new files from {dir_path}")
         
         for i, file in enumerate(files, 1):
             logger.info(f"  [{i}/{total}] {file.name}...")
@@ -372,6 +412,15 @@ class NotionSync:
             
             if result.get("success"):
                 logger.info(f"    ✅ {result.get('url', '')}")
+                
+                # Record sync
+                file_key = str(file.relative_to(dir_path))
+                synced_files[file_key] = {
+                    "url": result.get("url", ""),
+                    "title": result.get("title", ""),
+                    "synced_at": datetime.now().isoformat(),
+                    "file_path": str(file),
+                }
             else:
                 logger.error(f"    ❌ {result.get('error', 'Unknown error')}")
             
@@ -380,6 +429,12 @@ class NotionSync:
             # Rate limit
             if i < total:
                 await asyncio.sleep(self.rate_limit_delay)
+        
+        # Save sync records
+        sync_records["synced_files"] = synced_files
+        sync_records_file.parent.mkdir(parents=True, exist_ok=True)
+        sync_records_file.write_text(json.dumps(sync_records, indent=2), encoding="utf-8")
+        logger.info(f"Saved sync records to {sync_records_file}")
         
         return results
     

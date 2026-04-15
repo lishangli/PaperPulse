@@ -65,6 +65,11 @@ class Paper:
     innovations: list[str] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)
     
+    # Notion sync status
+    notion_synced: bool = False
+    notion_url: str = ""
+    notion_synced_at: Optional[datetime] = None
+    
     # Timestamps
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -91,6 +96,9 @@ class Paper:
             "keywords": self.keywords,
             "innovations": self.innovations,
             "limitations": self.limitations,
+            "notion_synced": self.notion_synced,
+            "notion_url": self.notion_url,
+            "notion_synced_at": self.notion_synced_at.isoformat() if self.notion_synced_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "published_date": self.published_date.isoformat() if self.published_date else None,
@@ -123,6 +131,9 @@ class Paper:
             keywords=data.get("keywords", []),
             innovations=data.get("innovations", []),
             limitations=data.get("limitations", []),
+            notion_synced=data.get("notion_synced", False),
+            notion_url=data.get("notion_url", ""),
+            notion_synced_at=datetime.fromisoformat(data["notion_synced_at"]) if data.get("notion_synced_at") else None,
             created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(),
             updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(),
             published_date=datetime.fromisoformat(data["published_date"]) if data.get("published_date") else None,
