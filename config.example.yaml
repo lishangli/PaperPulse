@@ -15,16 +15,24 @@ daily_reading:
   
   domains:
     - name: "math"
-      weight: 10  # 10% = 1 paper
+      weight: 25  # 25% = 2-3 papers (increased for computational math)
       categories:
-        - math.NA  # Numerical Analysis
+        - math.NA  # Numerical Analysis (计算数学)
+        - math.AP  # Analysis of PDEs
         - math.CO  # Combinatorics
         - math.ST  # Statistics
         - math.IT  # Information Theory
-      keywords: []
+        - math.PR  # Probability
+      keywords:
+        - numerical
+        - PDE
+        - differential equation
+        - computational
+        - hyperbolic
+        - plasma
     
     - name: "ai_theory"
-      weight: 30  # 30% = 3 papers
+      weight: 25  # 25% = 2-3 papers
       categories:
         - cs.AI
         - cs.LG
@@ -32,7 +40,7 @@ daily_reading:
       keywords: []
     
     - name: "ai_os_compiler"
-      weight: 30  # 30% = 3 papers
+      weight: 25  # 25% = 2-3 papers
       categories:
         - cs.AR  # Architecture
         - cs.OS  # Operating Systems
@@ -43,7 +51,7 @@ daily_reading:
         - systems
     
     - name: "ai_infrastructure"
-      weight: 30  # 30% = 3 papers
+      weight: 25  # 25% = 2-3 papers
       categories:
         - cs.DC  # Distributed Computing
         - cs.NI  # Networking
