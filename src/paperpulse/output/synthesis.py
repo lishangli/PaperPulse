@@ -86,7 +86,8 @@ class SynthesisReport:
             content = content_path.read_text(encoding="utf-8")
 
         # Truncate if too long (LLM token limit)
-        max_chars = 50000  # ~12k tokens
+        # Use config value if available, else default
+        max_chars = getattr(self.config.synthesis, 'max_content_chars', 50000)
         if len(content) > max_chars:
             content = content[:max_chars] + "\n\n... (content truncated due to length)"
 

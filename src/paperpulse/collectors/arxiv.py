@@ -26,8 +26,10 @@ class ArxivCollector(BaseCollector):
     # LaTeX source URL
     LATEX_URL = "https://arxiv.org/e-print/{arxiv_id}"
 
-    # Rate limiting
-    REQUEST_DELAY = 3.0  # arXiv requires >=3 seconds between requests
+    # Rate limiting (default, can be overridden by config)
+    _request_delay: float = 3.0  # arXiv requires >=3 seconds between requests
+    _retry_count: int = 3
+    _retry_wait: float = 5.0
     _last_request_time: float = 0.0
 
     def __init__(
@@ -35,6 +37,7 @@ class ArxivCollector(BaseCollector):
         categories: Optional[list[str]] = None,
         keywords: Optional[list[str]] = None,
         max_papers: int = 100,
+        arxiv_api_config: Optional[Any] = None,  # ArxivAPIConfig from config.py
     ):
         """Initialize arXiv collector.
 
@@ -42,10 +45,17 @@ class ArxivCollector(BaseCollector):
             categories: arXiv categories to monitor (e.g., cs.AI, cs.CL)
             keywords: Optional keywords to filter
             max_papers: Maximum papers per collection
+            arxiv_api_config: ArxivAPIConfig object with rate limiting settings
         """
         self.categories = categories or ["cs.AI", "cs.CL", "cs.LG"]
         self.keywords = keywords or []
         self.max_papers = max_papers
+        
+        # Use config values if available
+        if arxiv_api_config:
+            self._request_delay = arxiv_api_config.rate_limit_wait
+            self._retry_count = arxiv_api_config.retry_count
+            self._retry_wait = arxiv_api_config.retry_wait
 
     def collect(self, **kwargs) -> list[Paper]:
         """Collect papers from arXiv based on categories."""
@@ -325,8 +335,8 @@ class ArxivCollector(BaseCollector):
     def _rate_limit(self) -> None:
         """Enforce rate limiting."""
         elapsed = time.time() - self._last_request_time
-        if elapsed < self.REQUEST_DELAY:
-            time.sleep(self.REQUEST_DELAY - elapsed)
+        if elapsed < self._request_delay:
+            time.sleep(self._request_delay - elapsed)
         self._last_request_time = time.time()
 
     def get_paper_by_id(self, arxiv_id: str) -> Optional[Paper]:

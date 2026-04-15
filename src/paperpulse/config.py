@@ -40,6 +40,28 @@ class SourcesConfig:
 
 
 @dataclass
+class DomainConfig:
+    """Configuration for a research domain."""
+    name: str = ""
+    weight: int = 10  # Percentage weight
+    categories: list[str] = field(default_factory=list)  # arXiv categories
+    keywords: list[str] = field(default_factory=list)  # Search keywords
+
+
+@dataclass
+class DailyReadingConfig:
+    """Configuration for daily automated paper reading."""
+    enabled: bool = True
+    total_papers: int = 10  # Total papers to read per day
+    domains: list[DomainConfig] = field(default_factory=lambda: [
+        DomainConfig(name="math", weight=10, categories=["math.NA", "math.CO", "math.ST", "math.IT"]),
+        DomainConfig(name="ai_theory", weight=30, categories=["cs.AI", "cs.LG", "cs.CL"]),
+        DomainConfig(name="ai_os_compiler", weight=30, categories=["cs.AR", "cs.OS"], keywords=["compiler", "operating system", "OS", "systems"]),
+        DomainConfig(name="ai_infrastructure", weight=30, categories=["cs.DC", "cs.NI"], keywords=["infrastructure", "distributed", "cloud", "GPU", "cluster"]),
+    ])
+
+
+@dataclass
 class PDFConfig:
     enabled: bool = True
     max_concurrent: int = 5
@@ -63,20 +85,54 @@ class DocumentConfig:
 
 @dataclass
 class LLMConfig:
-    provider: str = "openai"
+    # Backend selection: "openai" for direct API, or ACP backend name
+    # Supported ACP backends: "pi", "claude-code", "codex-cli", "copilot-cli", "gemini-cli"
+    backend: str = "openai"
+    
+    # OpenAI API settings (used when backend == "openai")
     base_url: str = "https://api.openai.com/v1"
     api_key_env: str = "OPENAI_API_KEY"
     api_key: str = ""
-    primary_model: str = "gpt-4o"
-    fallback_model: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_tokens: int = 4096
+    
+    # Model selection (works for both OpenAI and ACP backends)
+    # For OpenAI: "gpt-4o", "gpt-4o-mini", etc.
+    # For ACP backends: use provider/model format, e.g., "anthropic/claude-sonnet-4-20250514"
+    primary_model: str = "gpt-4o"
+    fallback_model: str = "gpt-4o-mini"
+    
+    # ACP-specific settings (used when backend != "openai")
+    thinking_level: str = "medium"  # off, minimal, low, medium, high, xhigh
+    acp_command: str = ""  # Custom command to spawn agent (optional)
+    acp_timeout_sec: int = 180  # Timeout for agent responses (longer for research)
+    acp_use_session: bool = False  # Enable session persistence
+    acp_cwd: str = ""  # Working directory for agent
+    acp_extra_args: list[str] = field(default_factory=list)  # Additional CLI arguments
     
     def get_api_key(self) -> str:
         """Get API key from config or environment."""
         if self.api_key:
             return self.api_key
         return os.environ.get(self.api_key_env, "")
+    
+    def is_acp_backend(self) -> bool:
+        """Check if using an ACP-compatible backend."""
+        return self.backend != "openai"
+    
+    def get_acp_config(self):
+        """Get ACPConfig for ACP backends."""
+        from .analysis.acp_client import ACPConfig
+        return ACPConfig(
+            backend=self.backend,
+            model=self.primary_model,
+            thinking_level=self.thinking_level,
+            command=self.acp_command,
+            timeout_sec=self.acp_timeout_sec,
+            use_session=self.acp_use_session,
+            cwd=self.acp_cwd,
+            extra_args=self.acp_extra_args,
+        )
 
 
 @dataclass
@@ -142,6 +198,130 @@ class IdeasScoringConfig:
 
 
 @dataclass
+class NotionCategoryRuleConfig:
+    """Configuration for a single category detection rule."""
+    category: str = ""
+    keywords: list[str] = field(default_factory=list)
+
+
+@dataclass
+class NotionCategoryRulesConfig:
+    """Configuration for category auto-detection rules."""
+    default: str = "Research"
+    rules: list[NotionCategoryRuleConfig] = field(default_factory=lambda: [
+        NotionCategoryRuleConfig(category="AI", keywords=['ai', 'llm', 'agent', 'neural', 'deep', 'machine learning', 'benchmark']),
+        NotionCategoryRuleConfig(category="Compiler", keywords=['compiler', 'cgra', 'scheduling', 'optimization', 'hardware', 'modulo']),
+        NotionCategoryRuleConfig(category="Math", keywords=['math', 'proof', 'equation', 'theorem', 'hyperbolic', 'particle', 'plasma']),
+        NotionCategoryRuleConfig(category="System", keywords=['system', 'os', 'infrastructure', 'distributed']),
+    ])
+
+
+@dataclass
+class NotionConfig:
+    """Configuration for Notion sync using notionary."""
+    enabled: bool = False
+    api_key_env: str = "NOTION_API_KEY"
+    api_key: str = ""  # Or read from environment
+    # Target page/database to sync reports to
+    # Can be page title (will search) or page ID
+    target_page: str = ""  # e.g., "PaperPulse Reports" or UUID
+    target_database: str = ""  # e.g., "Research Papers" or UUID
+    # Sync options
+    create_new_pages: bool = True  # Create new pages instead of appending
+    clear_previous: bool = False  # Clear previous pages with same title
+    # Rate limiting
+    rate_limit_delay: float = 0.5  # Delay between API calls (seconds)
+    
+    # Category auto-detection rules
+    category_rules: NotionCategoryRulesConfig = field(default_factory=NotionCategoryRulesConfig)
+    # Common tags for extraction
+    common_tags: list[str] = field(default_factory=lambda: [
+        'AI', 'LLM', 'Agent', 'Compiler', 'CGRA', 'Scheduling',
+        'Optimization', 'Research', 'Survey', 'Benchmark', 'Math',
+        'Neural', 'Deep Learning', 'Plasma', 'Hyperbolic'
+    ])
+    # Property settings
+    summary_max_length: int = 150
+    max_tags_per_page: int = 5
+    
+    def get_api_key(self) -> str:
+        """Get API key from config or environment."""
+        if self.api_key:
+            return self.api_key
+        return os.environ.get(self.api_key_env, "")
+    
+    def detect_category(self, title: str) -> str:
+        """Detect category from title using rules."""
+        title_lower = title.lower()
+        for rule in self.category_rules.rules:
+            for keyword in rule.keywords:
+                if keyword.lower() in title_lower:
+                    return rule.category
+        return self.category_rules.default
+    
+    def extract_tags(self, title: str) -> list[str]:
+        """Extract tags from title using common_tags."""
+        title_lower = title.lower()
+        tags = []
+        for tag in self.common_tags:
+            if tag.lower() in title_lower:
+                tags.append(tag)
+        if not tags:
+            tags = ['Research']
+        return tags[:self.max_tags_per_page]
+
+
+@dataclass
+class SynthesisConfig:
+    """Configuration for synthesis report generation."""
+    enabled: bool = True
+    max_content_chars: int = 50000  # ~12k tokens
+    llm_call_interval: float = 10.0  # Seconds between LLM calls
+    filename_format: str = "{arxiv_id}_synthesis_{date}"
+
+
+@dataclass
+class ArxivAPIConfig:
+    """Configuration for arXiv API."""
+    rate_limit_wait: float = 3.0  # Seconds between requests
+    retry_count: int = 3
+    retry_wait: float = 5.0  # Seconds before retry
+
+
+@dataclass
+class CLIDefaultsConfig:
+    """Default values for CLI commands."""
+    collect_days: int = 7
+    collect_limit: int = 20
+    convert_mode: str = "auto"
+    convert_pdf_dir: str = "data/pdfs"
+    analyze_limit: int = 10
+    synthesis_days: int = 1
+    synthesis_limit: int = 5
+    ideas_num: int = 5
+    ideas_min_score: float = 0.6
+    list_limit: int = 10
+    notion_rate_limit: float = 0.5
+    notion_pattern: str = "*.md"
+
+
+@dataclass
+class PathsConfig:
+    """Configuration for paths (supports environment variables)."""
+    paperpulse_dir: str = "."  # Relative to config file
+    log_dir: str = "./logs"
+    bin_dir: str = "${HOME}/.local/bin"
+    
+    def resolve_path(self, path: str, base_dir: Path | None = None) -> Path:
+        """Resolve path with environment variable expansion."""
+        import os
+        expanded = os.path.expandvars(path)
+        if base_dir and not Path(expanded).is_absolute():
+            return base_dir / expanded
+        return Path(expanded)
+
+
+@dataclass
 class IdeasConfig:
     enabled: bool = True
     papers_per_idea: int = 5
@@ -170,6 +350,13 @@ class PaperPulseConfig:
     output: OutputConfig = field(default_factory=OutputConfig)
     integration: IntegrationConfig = field(default_factory=IntegrationConfig)
     ideas: IdeasConfig = field(default_factory=IdeasConfig)
+    daily_reading: DailyReadingConfig = field(default_factory=DailyReadingConfig)
+    notion: NotionConfig = field(default_factory=NotionConfig)
+    # New configuration sections
+    synthesis: SynthesisConfig = field(default_factory=SynthesisConfig)
+    arxiv_api: ArxivAPIConfig = field(default_factory=ArxivAPIConfig)
+    cli_defaults: CLIDefaultsConfig = field(default_factory=CLIDefaultsConfig)
+    paths: PathsConfig = field(default_factory=PathsConfig)
     
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> PaperPulseConfig:
@@ -232,6 +419,69 @@ class PaperPulseConfig:
                 min_novelty_score=ideas.get("min_novelty_score", 0.6),
                 scoring=IdeasScoringConfig(**scoring) if scoring else IdeasScoringConfig(),
             )
+        
+        if "daily_reading" in data:
+            dr = data["daily_reading"]
+            domains = []
+            for domain_data in dr.get("domains", []):
+                domains.append(DomainConfig(
+                    name=domain_data.get("name", ""),
+                    weight=domain_data.get("weight", 10),
+                    categories=domain_data.get("categories", []),
+                    keywords=domain_data.get("keywords", []),
+                ))
+            config.daily_reading = DailyReadingConfig(
+                enabled=dr.get("enabled", True),
+                total_papers=dr.get("total_papers", 10),
+                domains=domains if domains else None,  # Use default if empty
+            )
+        
+        if "notion" in data:
+            notion_data = data["notion"]
+            
+            # Parse category_rules
+            category_rules_data = notion_data.get("category_rules", {})
+            rules_list = []
+            for rule_data in category_rules_data.get("rules", []):
+                rules_list.append(NotionCategoryRuleConfig(
+                    category=rule_data.get("category", ""),
+                    keywords=rule_data.get("keywords", []),
+                ))
+            category_rules = NotionCategoryRulesConfig(
+                default=category_rules_data.get("default", "Research"),
+                rules=rules_list if rules_list else None,
+            )
+            
+            config.notion = NotionConfig(
+                enabled=notion_data.get("enabled", False),
+                api_key_env=notion_data.get("api_key_env", "NOTION_API_KEY"),
+                api_key=notion_data.get("api_key", ""),
+                target_page=notion_data.get("target_page", ""),
+                target_database=notion_data.get("target_database", ""),
+                create_new_pages=notion_data.get("create_new_pages", True),
+                clear_previous=notion_data.get("clear_previous", False),
+                rate_limit_delay=notion_data.get("rate_limit_delay", 0.5),
+                category_rules=category_rules,
+                common_tags=notion_data.get("common_tags", config.notion.common_tags),
+                summary_max_length=notion_data.get("summary_max_length", 150),
+                max_tags_per_page=notion_data.get("max_tags_per_page", 5),
+            )
+        
+        # Parse synthesis config
+        if "synthesis" in data:
+            config.synthesis = SynthesisConfig(**data["synthesis"])
+        
+        # Parse arxiv_api config
+        if "arxiv_api" in data:
+            config.arxiv_api = ArxivAPIConfig(**data["arxiv_api"])
+        
+        # Parse cli_defaults config
+        if "cli_defaults" in data:
+            config.cli_defaults = CLIDefaultsConfig(**data["cli_defaults"])
+        
+        # Parse paths config
+        if "paths" in data:
+            config.paths = PathsConfig(**data["paths"])
         
         return config
     

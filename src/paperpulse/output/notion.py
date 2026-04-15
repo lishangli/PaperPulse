@@ -51,6 +51,7 @@ class NotionSync:
         create_new_pages: bool = True,
         clear_previous: bool = False,
         rate_limit_delay: float = 0.5,
+        notion_config: Optional[Any] = None,  # NotionConfig from config.py
     ):
         """Initialize Notion sync.
         
@@ -61,6 +62,7 @@ class NotionSync:
             create_new_pages: Create new pages instead of appending
             clear_previous: Clear previous pages with same title
             rate_limit_delay: Delay between API calls (seconds)
+            notion_config: NotionConfig object with category rules and tags
         """
         self.api_key = api_key or os.environ.get("NOTION_API_KEY", "")
         if not self.api_key:
@@ -74,6 +76,7 @@ class NotionSync:
         self.create_new_pages = create_new_pages
         self.clear_previous = clear_previous
         self.rate_limit_delay = rate_limit_delay
+        self.notion_config = notion_config
         
         # Notionary client (created lazily)
         self._client = None
@@ -183,29 +186,37 @@ class NotionSync:
                 slug_base = re.sub(r'[^a-zA-Z0-9\-]', '-', title.lower())[:50]
                 slug_base = re.sub(r'-+', '-', slug_base).strip('-')
                 
-                # Auto-detect category from title/content
-                category = "Research"  # Default
-                title_lower = title.lower()
-                if any(kw in title_lower for kw in ['ai', 'llm', 'agent', 'neural', 'deep', 'machine learning']):
-                    category = "AI"
-                elif any(kw in title_lower for kw in ['compiler', 'cgra', 'scheduling', 'optimization', 'hardware']):
-                    category = "Compiler"
-                elif any(kw in title_lower for kw in ['math', 'proof', 'equation', 'theorem', 'analysis']):
-                    category = "Math"
-                elif any(kw in title_lower for kw in ['system', 'os', 'infrastructure', 'distributed']):
-                    category = "System"
+                # Use config for category and tags (if available)
+                if self.notion_config:
+                    category = self.notion_config.detect_category(title)
+                    tag_keywords = self.notion_config.extract_tags(title)
+                    summary_max_length = self.notion_config.summary_max_length
+                    max_tags = self.notion_config.max_tags_per_page
+                else:
+                    # Fallback to hardcoded defaults (backward compatibility)
+                    category = "Research"
+                    title_lower = title.lower()
+                    if any(kw in title_lower for kw in ['ai', 'llm', 'agent', 'neural', 'deep', 'machine learning', 'benchmark']):
+                        category = "AI"
+                    elif any(kw in title_lower for kw in ['compiler', 'cgra', 'scheduling', 'optimization', 'hardware']):
+                        category = "Compiler"
+                    elif any(kw in title_lower for kw in ['math', 'proof', 'equation', 'theorem', 'hyperbolic', 'particle', 'plasma']):
+                        category = "Math"
+                    elif any(kw in title_lower for kw in ['system', 'os', 'infrastructure', 'distributed']):
+                        category = "System"
+                    
+                    common_tags = ['AI', 'LLM', 'Agent', 'Compiler', 'CGRA', 'Scheduling', 
+                                   'Optimization', 'Research', 'Survey', 'Benchmark', 'Math']
+                    tag_keywords = []
+                    for tag in common_tags:
+                        if tag.lower() in title_lower:
+                            tag_keywords.append(tag)
+                    if not tag_keywords:
+                        tag_keywords = ['Research']
+                    summary_max_length = 150
+                    max_tags = 5
                 
-                # Extract tags from title (keywords)
-                tag_keywords = []
-                common_tags = ['AI', 'LLM', 'Agent', 'Compiler', 'CGRA', 'Scheduling', 
-                               'Optimization', 'Research', 'Survey', 'Benchmark', 'Math']
-                for tag in common_tags:
-                    if tag.lower() in title_lower:
-                        tag_keywords.append(tag)
-                if not tag_keywords:
-                    tag_keywords = ['Research']
-                
-                # Generate summary from content (first 200 chars)
+                # Generate summary from content
                 summary = ""
                 for line in content.split('\n')[:20]:
                     if line and not line.startswith('#') and len(line) > 50:
@@ -224,8 +235,8 @@ class NotionSync:
                         "slug": {"rich_text": [{"text": {"content": slug_base}}]},
                         "date": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},
                         "category": {"select": {"name": category}},
-                        "tags": {"multi_select": [{"name": t} for t in tag_keywords[:5]]},
-                        "summary": {"rich_text": [{"text": {"content": summary[:150] if summary else title[:150]}}]}
+                        "tags": {"multi_select": [{"name": t} for t in tag_keywords[:max_tags]]},
+                        "summary": {"rich_text": [{"text": {"content": summary[:summary_max_length] if summary else title[:summary_max_length]}}]}
                     }
                 }
                 

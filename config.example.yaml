@@ -1,10 +1,58 @@
-# PaperPulse Configuration
-# Copy this file to config.yaml and customize
+# PaperPulse Configuration for Testing
+# Using pi as ACP backend (no API key needed)
 
 project:
   name: "paperpulse"
   timezone: "Asia/Shanghai"
   log_level: "INFO"
+
+# ========================================
+# Daily Reading Configuration
+# ========================================
+daily_reading:
+  enabled: true
+  total_papers: 10  # Total papers per day
+  
+  domains:
+    - name: "math"
+      weight: 10  # 10% = 1 paper
+      categories:
+        - math.NA  # Numerical Analysis
+        - math.CO  # Combinatorics
+        - math.ST  # Statistics
+        - math.IT  # Information Theory
+      keywords: []
+    
+    - name: "ai_theory"
+      weight: 30  # 30% = 3 papers
+      categories:
+        - cs.AI
+        - cs.LG
+        - cs.CL
+      keywords: []
+    
+    - name: "ai_os_compiler"
+      weight: 30  # 30% = 3 papers
+      categories:
+        - cs.AR  # Architecture
+        - cs.OS  # Operating Systems
+      keywords:
+        - compiler
+        - operating system
+        - OS
+        - systems
+    
+    - name: "ai_infrastructure"
+      weight: 30  # 30% = 3 papers
+      categories:
+        - cs.DC  # Distributed Computing
+        - cs.NI  # Networking
+      keywords:
+        - infrastructure
+        - distributed
+        - cloud
+        - GPU
+        - cluster
 
 # ========================================
 # Data Sources Configuration
@@ -15,79 +63,46 @@ sources:
     categories:
       - cs.AI
       - cs.CL
-      - cs.LG
-      - cs.CV
-      - cs.NE
     keywords: []
-    max_papers_per_day: 100
+    max_papers_per_day: 10
   
   semantic_scholar:
-    enabled: true
-    fields:
-      - "Artificial Intelligence"
-      - "Machine Learning"
-      - "Natural Language Processing"
-    max_papers_per_day: 50
+    enabled: false
   
   papers_with_code:
-    enabled: true
-    areas:
-      - natural-language-processing
-      - computer-vision
-      - machine-learning
-    max_papers_per_day: 50
+    enabled: false
 
 # ========================================
 # Document Acquisition
 # ========================================
 document:
-  prefer_latex_source: true
+  prefer_latex_source: false
   
   pdf:
-    enabled: true
-    max_concurrent: 5
-    retry_count: 3
-    timeout_sec: 60
-    max_size_mb: 50
+    enabled: false
   
   converter:
     backend: "mineru"
-    mineru:
-      output_format: "markdown"
 
 # ========================================
-# LLM Configuration
+# LLM Configuration - Using pi ACP Backend
 # ========================================
 llm:
-  provider: "openai"
-  base_url: "https://api.openai.com/v1"
-  api_key_env: "OPENAI_API_KEY"
-  api_key: ""
-  primary_model: "gpt-4o"
-  fallback_model: "gpt-4o-mini"
-  temperature: 0.7
-  max_tokens: 4096
+  backend: "pi"
+  primary_model: "aliyun/kimi-k2.5"
+  thinking_level: "medium"
 
 # ========================================
 # Scheduler Configuration
 # ========================================
 scheduler:
-  enabled: true
-  daily_monitor: "0 8 * * *"
-  daily_report: "30 8 * * *"
-  weekly_summary: "0 9 * * 1"
+  enabled: false
 
 # ========================================
 # Obsidian Configuration
 # ========================================
 obsidian:
-  enabled: true
-  vault_path: ""
-  folders:
-    papers: "Papers"
-    ideas: "Ideas"
-    daily: "Daily"
-    latex: "LaTeX"
+  enabled: false
 
 # ========================================
 # Storage Configuration
@@ -106,7 +121,6 @@ output:
   reports_dir: "./reports"
   formats:
     - markdown
-    - json
 
 # ========================================
 # AutoResearchClaw Integration
@@ -116,22 +130,126 @@ integration:
     enabled: true
     path: "/home/lishangli/repos/AutoResearchClaw"
     venv_path: "/home/lishangli/repos/AutoResearchClaw/.venv"
-    config_template: "config.arc.yaml"
-    auto_run: false
-    require_confirmation: true
+    auto_run: true        # Enable auto-research in auto pipeline
+    require_confirmation: false  # No confirmation needed for auto mode
 
 # ========================================
 # IDEA Generation
 # ========================================
 ideas:
   enabled: true
-  papers_per_idea: 5
-  max_ideas_per_day: 10
-  min_novelty_score: 0.6
+  papers_per_idea: 3
+  max_ideas_per_day: 5
+  min_novelty_score: 0.5
+
+# ========================================
+# Notion Sync Configuration
+# ========================================
+notion:
+  enabled: true
+  api_key: "YOUR_NOTION_API_KEY_HERE"
+  target_database: "Shangli Blog"
+  create_new_pages: true
+  clear_previous: false
+  rate_limit_delay: 0.5
   
-  scoring:
-    novelty_weight: 0.30
-    feasibility_weight: 0.25
-    impact_weight: 0.20
-    evidence_weight: 0.15
-    timing_weight: 0.10
+  # Category auto-detection rules
+  category_rules:
+    default: "Research"
+    rules:
+      - category: "AI"
+        keywords:
+          - ai
+          - llm
+          - agent
+          - neural
+          - deep
+          - machine learning
+          - benchmark
+      - category: "Compiler"
+        keywords:
+          - compiler
+          - cgra
+          - scheduling
+          - optimization
+          - hardware
+          - modulo
+      - category: "Math"
+        keywords:
+          - math
+          - proof
+          - equation
+          - theorem
+          - hyperbolic
+          - particle
+          - plasma
+      - category: "System"
+        keywords:
+          - system
+          - os
+          - infrastructure
+          - distributed
+  
+  # Common tags for extraction
+  common_tags:
+    - AI
+    - LLM
+    - Agent
+    - Compiler
+    - CGRA
+    - Scheduling
+    - Optimization
+    - Research
+    - Survey
+    - Benchmark
+    - Math
+    - Neural
+    - Deep Learning
+    - Plasma
+    - Hyperbolic
+  
+  # Property settings
+  summary_max_length: 150
+  max_tags_per_page: 5
+
+# ========================================
+# Synthesis Report Configuration
+# ========================================
+synthesis:
+  enabled: true
+  max_content_chars: 50000  # ~12k tokens
+  llm_call_interval: 10  # seconds between LLM calls
+  filename_format: "{arxiv_id}_synthesis_{date}"
+
+# ========================================
+# arXiv API Configuration
+# ========================================
+arxiv_api:
+  rate_limit_wait: 3  # seconds between requests (arXiv requires >=3s)
+  retry_count: 3
+  retry_wait: 5  # seconds before retry
+
+# ========================================
+# CLI Defaults Configuration
+# ========================================
+cli_defaults:
+  collect_days: 7
+  collect_limit: 20
+  convert_mode: "auto"
+  convert_pdf_dir: "data/pdfs"
+  analyze_limit: 10
+  synthesis_days: 1
+  synthesis_limit: 5
+  ideas_num: 5
+  ideas_min_score: 0.6
+  list_limit: 10
+  notion_rate_limit: 0.5
+  notion_pattern: "*.md"
+
+# ========================================
+# Paths Configuration
+# ========================================
+paths:
+  paperpulse_dir: "."  # relative to config file
+  log_dir: "./logs"
+  bin_dir: "${HOME}/.local/bin"
