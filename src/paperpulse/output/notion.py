@@ -40,6 +40,55 @@ def _get_notionary():
     return _notionary
 
 
+def _convert_latex_equations_to_notion(content: str) -> str:
+    """Convert LaTeX equations to Notion-compatible format.
+    
+    Notion Markdown API format:
+    - Inline equations: $...$ (kept as-is, Notion handles directly)
+    - Block equations: $$...$$ to math code block
+    
+    Args:
+        content: Markdown content with LaTeX equations
+    
+    Returns:
+        Content with Notion-compatible equation format
+    """
+    import re
+    
+    # Convert block equations $$...$$ to ```math ... ```
+    block_pattern = r'\$\$([\s\S]*?)\$\$'
+    
+    def replace_block_eq(match):
+        eq_content = match.group(1).strip()
+        return "```math\n" + eq_content + "\n```"
+    
+    content = re.sub(block_pattern, replace_block_eq, content)
+    
+    # Inline equations $...$ are handled directly by Notion
+    # No conversion needed
+    
+    return content
+
+
+def _convert_markdown_to_notion(content: str) -> str:
+    """Convert Markdown content to Notion-compatible format.
+    
+    Handles:
+    - LaTeX equations (inline and block)
+    - Other Markdown elements that need conversion
+    
+    Args:
+        content: Original Markdown content
+    
+    Returns:
+        Notion-compatible content
+    """
+    # Convert equations
+    content = _convert_latex_equations_to_notion(content)
+    
+    return content
+
+
 class NotionSync:
     """Sync Markdown content to Notion using notionary."""
     
@@ -125,6 +174,9 @@ class NotionSync:
         try:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
+            
+            # Convert LaTeX equations to Notion format
+            content = _convert_markdown_to_notion(content)
         except Exception as e:
             return {"success": False, "error": f"Failed to read file: {e}"}
         
