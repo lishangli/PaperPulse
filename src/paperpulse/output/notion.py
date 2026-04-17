@@ -156,6 +156,7 @@ class NotionSync:
         title: Optional[str] = None,
         target_page: Optional[str] = None,
         target_database: Optional[str] = None,
+        existing_page_id: Optional[str] = None,  # Update existing page instead of creating new
     ) -> dict:
         """Sync a single Markdown file to Notion.
         
@@ -164,6 +165,7 @@ class NotionSync:
             title: Page title (extracted from file if not provided)
             target_page: Override target page
             target_database: Override target database
+            existing_page_id: If provided, update this page instead of creating new
         
         Returns:
             Result dict with url/success/error
@@ -204,6 +206,40 @@ class NotionSync:
             page_url = None
             
             if target_database:
+                # Check if we should update existing page
+                if existing_page_id:
+                    # Update existing page
+                    logger.info(f"Updating existing page: {existing_page_id}")
+                    logger.debug(f"Page ID passed from sync_directory: {existing_page_id}")
+                    
+                    try:
+                        # Convert existing_page_id to UUID format if needed
+                        page_id = existing_page_id.replace("-", "")
+                        
+                        # Update page content using markdown API
+                        if content:
+                            markdown_data = {
+                                "type": "replace_content",
+                                "replace_content": {
+                                    "new_str": content
+                                }
+                            }
+                            await client._http.patch(f"pages/{page_id}/markdown", data=markdown_data)
+                        
+                        page_url = f"https://www.notion.so/{existing_page_id}"
+                        
+                        return {
+                            "success": True,
+                            "url": page_url,
+                            "title": title,
+                            "file": str(file_path),
+                            "updated": True,
+                        }
+                    except Exception as e:
+                        logger.error(f"Failed to update page: {e}")
+                        return {"success": False, "error": f"Failed to update page: {e}"}
+                
+                # Create new page (no existing_page_id provided)
                 # Use database (DataSource) - Note: Notion uses 'data_source_id' for DataSources
                 # First get the data_source info
                 ds_id_str = target_database
@@ -443,6 +479,29 @@ class NotionSync:
                 logger.info(f"Skipping {len(skipped_files)} already synced files")
             
             files = new_files
+        else:
+            # --force mode: update existing pages instead of creating new
+            # Extract page_id from URL for each synced file
+            import re
+            for file_key, record in synced_files.items():
+                url = record.get("url", "")
+                if url:
+                    # Extract page_id from URL
+                    # URL format: https://www.notion.so/[title-]page_id
+                    # page_id can be UUID format (with dashes) or 32 hex chars (without dashes)
+                    match = re.search(r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$', url)
+                    if match:
+                        page_id = match.group(1)
+                    else:
+                        match = re.search(r'([a-f0-9]{32})$', url)
+                        if match:
+                            raw_id = match.group(1)
+                            page_id = f"{raw_id[:8]}-{raw_id[8:12]}-{raw_id[12:16]}-{raw_id[16:20]}-{raw_id[20:]}"
+                    if match:
+                        record["page_id"] = page_id
+                        logger.debug(f"Extracted page_id for {file_key}: {page_id}")
+            
+            logger.info(f"Force mode: Will update existing pages if found")
         
         if not files:
             logger.info("All files already synced, nothing to do")
@@ -451,15 +510,23 @@ class NotionSync:
         results = []
         total = len(files)
         
-        logger.info(f"Syncing {total} new files from {dir_path}")
+        if skip_existing:
+            logger.info(f"Syncing {total} new files from {dir_path}")
+        else:
+            logger.info(f"Syncing {total} files (new or update existing)")
         
         for i, file in enumerate(files, 1):
             logger.info(f"  [{i}/{total}] {file.name}...")
+            
+            # Check if file was previously synced
+            file_key = str(file.relative_to(dir_path))
+            existing_page_id = synced_files.get(file_key, {}).get("page_id") if not skip_existing else None
             
             result = await self.sync_file(
                 str(file),
                 target_page=target_page,
                 target_database=target_database,
+                existing_page_id=existing_page_id,
             )
             
             if result.get("success"):
@@ -467,11 +534,27 @@ class NotionSync:
                 
                 # Record sync
                 file_key = str(file.relative_to(dir_path))
+                url = result.get("url", "")
+                
+                # Extract page_id from URL and save
+                page_id = None
+                if url:
+                    # Handle both UUID format (with dashes) and 32-char format (without dashes)
+                    match = re.search(r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$', url)
+                    if match:
+                        page_id = match.group(1)
+                    else:
+                        match = re.search(r'([a-f0-9]{32})$', url)
+                        if match:
+                            raw_id = match.group(1)
+                            page_id = f"{raw_id[:8]}-{raw_id[8:12]}-{raw_id[12:16]}-{raw_id[16:20]}-{raw_id[20:]}"
+                
                 synced_files[file_key] = {
-                    "url": result.get("url", ""),
+                    "url": url,
                     "title": result.get("title", ""),
                     "synced_at": datetime.now().isoformat(),
                     "file_path": str(file),
+                    "page_id": page_id,
                 }
             else:
                 logger.error(f"    ❌ {result.get('error', 'Unknown error')}")
