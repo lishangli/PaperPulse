@@ -1564,5 +1564,114 @@ def notion_sync_cmd(
         sys.exit(1)
 
 
+
+
+@notion_cmd.command("cleanup")
+@click.option("--dry-run", is_flag=True, help="Preview duplicates without removing")
+@click.pass_context
+def notion_cleanup_cmd(ctx: click.Context, dry_run: bool):
+    """Remove duplicate pages from Notion database.
+    
+    Finds pages with duplicate titles and removes older duplicates.
+    Keeps the most recently created page for each title.
+    
+    Examples:
+        paperpulse notion cleanup           # Remove duplicates
+        paperpulse notion cleanup --dry-run # Preview only
+    """
+    import asyncio
+    from collections import defaultdict
+    from datetime import datetime
+    
+    config = ctx.obj["config"]
+    api_key = config.notion.get_api_key()
+    
+    if not api_key:
+        click.echo("❌ No Notion API key configured")
+        sys.exit(1)
+    
+    try:
+        from .output.notion import _get_notionary
+        
+        Notionary, _, _ = _get_notionary()
+        client = Notionary(api_key=api_key)
+        
+        click.echo("📋 Getting all pages from Notion...")
+        
+        async def cleanup():
+            all_pages = await client.pages.list(page_size=100)
+            click.echo(f"   Found {len(all_pages)} total pages")
+            
+            # Group by title
+            title_groups = defaultdict(list)
+            for page in all_pages:
+                title = page.title if hasattr(page, 'title') else str(page.id)
+                if not title:
+                    title = str(page.id)
+                title_groups[title].append(page)
+            
+            # Find duplicates
+            duplicates = {k: v for k, v in title_groups.items() if len(v) > 1}
+            
+            if not duplicates:
+                click.echo("✅ No duplicates found!")
+                return
+            
+            total_to_remove = sum(len(v)-1 for v in duplicates.values())
+            click.echo("")
+            click.echo(f"🔍 Found {len(duplicates)} titles with duplicates")
+            click.echo(f"⚠️  Total pages to remove: {total_to_remove}")
+            click.echo("")
+            
+            if dry_run:
+                click.echo("Dry-run mode - showing duplicates only:")
+                for title, pages in sorted(duplicates.items(), key=lambda x: len(x[1]), reverse=True)[:10]:
+                    display_title = title[:50] if len(title) > 50 else title
+                    click.echo(f"  '{display_title}': {len(pages)} copies")
+                click.echo("")
+                click.echo("   Run without --dry-run to remove duplicates")
+                return
+            
+            click.echo("Removing duplicates (keeping latest for each title)...")
+            click.echo("")
+            
+            removed_count = 0
+            kept_count = 0
+            
+            for title, pages in sorted(duplicates.items(), key=lambda x: len(x[1]), reverse=True):
+                sorted_pages = sorted(pages, key=lambda p: p.created_time if hasattr(p, 'created_time') else datetime.min, reverse=True)
+                keep_page = sorted_pages[0]
+                remove_pages = sorted_pages[1:]
+                
+                display_title = title[:40] if len(title) > 40 else title
+                click.echo(f"'{display_title}':")
+                kept_count += 1
+                
+                for page in remove_pages:
+                    try:
+                        await page.trash()
+                        removed_count += 1
+                        await asyncio.sleep(0.3)
+                    except Exception as e:
+                        click.echo(f"   ❌ Failed: {e}")
+            
+            click.echo("")
+            click.echo("=" * 50)
+            click.echo("Cleanup Summary")
+            click.echo("=" * 50)
+            click.echo(f"  Pages kept: {kept_count}")
+            click.echo(f"  Pages removed: {removed_count}")
+            click.echo(f"  Pages remaining: {len(all_pages) - removed_count}")
+        
+        asyncio.run(cleanup())
+        
+    except ImportError as e:
+        click.echo(f"❌ {e}")
+        click.echo("   Install with: uv pip install notionary")
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"❌ Error: {e}")
+        sys.exit(1)
+
 if __name__ == "__main__":
     main()
