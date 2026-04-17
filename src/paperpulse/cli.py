@@ -1395,8 +1395,7 @@ def notion_list(ctx: click.Context, query: Optional[str], databases: bool):
 @click.option("--recursive", "-r", is_flag=True, help="Search recursively (for directory)")
 @click.option("--rate-limit", default=0.5, help="Rate limit delay in seconds")
 @click.option("--dry-run", is_flag=True, help="Preview mode without syncing")
-@click.option("--skip-existing", "-s", is_flag=True, default=True, help="Skip already synced files")
-@click.option("--force", "-f", is_flag=True, help="Force sync all files (ignore skip-existing)")
+@click.option("--force", "-f", is_flag=True, help="Force sync all files (ignore modification check)")
 @click.pass_context
 def notion_sync_cmd(
     ctx: click.Context,
@@ -1408,16 +1407,21 @@ def notion_sync_cmd(
     recursive: bool,
     rate_limit: float,
     dry_run: bool,
-    skip_existing: bool,
     force: bool,
 ):
     """Sync Markdown file(s) to Notion.
     
     PATH can be a single file or a directory.
     
+    Smart incremental sync:
+    - New files: Create new Notion pages
+    - Modified files: Update existing Notion pages
+    - Unchanged files: Skip (compare file mtime with sync time)
+    
     Examples:
         paperpulse notion sync report.md -p "My Notes"
         paperpulse notion sync ./reports/ -d "PaperPulse Database"
+        paperpulse notion sync ./reports/ --force  # Sync all files
     """
     import asyncio
     from pathlib import Path
@@ -1509,20 +1513,20 @@ def notion_sync_cmd(
                         click.echo("   ✅ Preview complete")
                         return [{"success": True, "dry_run": True}]
                     else:
-                        # Determine skip_existing setting
-                        actual_skip_existing = skip_existing and not force
-                        
-                        if actual_skip_existing:
-                            click.echo("   Mode: Skip existing files (--skip-existing)")
+                        if force:
+                            click.echo("   Mode: Force sync all files")
                         else:
-                            click.echo("   Mode: Sync all files (--force)")
+                            click.echo("   Mode: Smart incremental sync")
+                            click.echo("     - New files: Create new pages")
+                            click.echo("     - Modified files: Update existing pages")
+                            click.echo("     - Unchanged files: Skip")
                         click.echo("")
                         
                         return await sync.sync_directory(
                             str(path_obj),
                             pattern=pattern,
                             recursive=recursive,
-                            skip_existing=actual_skip_existing,
+                            skip_existing=not force,  # Default: smart incremental, --force: sync all
                         )
         
         results = asyncio.run(_sync())

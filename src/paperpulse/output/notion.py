@@ -419,10 +419,15 @@ class NotionSync:
         recursive: bool = False,
         target_page: Optional[str] = None,
         target_database: Optional[str] = None,
-        skip_existing: bool = True,  # Skip already synced files
+        skip_existing: bool = True,  # Smart incremental sync (check file modifications)
         sync_records_path: Optional[str] = None,  # Path to sync records file
     ) -> list[dict]:
         """Sync all Markdown files in a directory.
+        
+        Smart incremental sync:
+        - New files: Create new Notion pages
+        - Modified files (file_mtime > synced_at): Update existing Notion pages
+        - Unchanged files: Skip
         
         Args:
             dir_path: Directory path
@@ -430,7 +435,7 @@ class NotionSync:
             recursive: Search recursively
             target_page: Override target page
             target_database: Override target database
-            skip_existing: Skip files that have already been synced
+            skip_existing: True = smart incremental sync, False = force sync all
             sync_records_path: Path to sync records JSON file
         
         Returns:
@@ -464,31 +469,28 @@ class NotionSync:
             logger.warning(f"No files found in {dir_path} matching {pattern}")
             return []
         
-        # Filter already synced files if skip_existing
-        if skip_existing:
-            new_files = []
-            skipped_files = []
-            for f in files:
-                file_key = str(f.relative_to(dir_path))
-                if file_key in synced_files:
-                    skipped_files.append(f)
-                else:
-                    new_files.append(f)
+        # Smart incremental sync: detect file changes
+        # Compare file modification time with last sync time
+        import re
+        new_files = []  # Files never synced before
+        update_files = []  # Files that have been modified since last sync
+        skip_files = []  # Files unchanged
+        
+        for f in files:
+            file_key = str(f.relative_to(dir_path))
             
-            if skipped_files:
-                logger.info(f"Skipping {len(skipped_files)} already synced files")
-            
-            files = new_files
-        else:
-            # --force mode: update existing pages instead of creating new
-            # Extract page_id from URL for each synced file
-            import re
-            for file_key, record in synced_files.items():
+            if file_key not in synced_files:
+                # New file - never synced before
+                new_files.append(f)
+            else:
+                # Check if file has been modified
+                record = synced_files[file_key]
+                last_sync_time = record.get("synced_at")
+                file_mtime = f.stat().st_mtime
+                
+                # Extract page_id from URL
                 url = record.get("url", "")
                 if url:
-                    # Extract page_id from URL
-                    # URL format: https://www.notion.so/[title-]page_id
-                    # page_id can be UUID format (with dashes) or 32 hex chars (without dashes)
                     match = re.search(r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$', url)
                     if match:
                         page_id = match.group(1)
@@ -499,9 +501,41 @@ class NotionSync:
                             page_id = f"{raw_id[:8]}-{raw_id[8:12]}-{raw_id[12:16]}-{raw_id[16:20]}-{raw_id[20:]}"
                     if match:
                         record["page_id"] = page_id
-                        logger.debug(f"Extracted page_id for {file_key}: {page_id}")
-            
-            logger.info(f"Force mode: Will update existing pages if found")
+                
+                # Check if file is newer than last sync
+                if last_sync_time:
+                    from datetime import datetime
+                    try:
+                        sync_dt = datetime.fromisoformat(last_sync_time)
+                        sync_timestamp = sync_dt.timestamp()
+                        
+                        if file_mtime > sync_timestamp:
+                            # File has been modified - needs update
+                            update_files.append(f)
+                        else:
+                            # File unchanged - skip
+                            skip_files.append(f)
+                    except Exception:
+                        # If we can't parse time, assume needs update
+                        update_files.append(f)
+                else:
+                    # No sync time recorded - needs update
+                    update_files.append(f)
+        
+        # Combine new and update files
+        files = new_files + update_files
+        
+        if skip_files:
+            logger.info(f"Skipping {len(skip_files)} unchanged files")
+        if new_files:
+            logger.info(f"Found {len(new_files)} new files to sync")
+        if update_files:
+            logger.info(f"Found {len(update_files)} modified files to update")
+        
+        if not skip_existing:
+            # --force mode: treat all files as needing sync
+            files = list(dir_path.glob(pattern)) if not recursive else list(dir_path.rglob(pattern))
+            logger.info(f"Force mode: syncing all {len(files)} files")
         
         if not files:
             logger.info("All files already synced, nothing to do")
@@ -518,9 +552,15 @@ class NotionSync:
         for i, file in enumerate(files, 1):
             logger.info(f"  [{i}/{total}] {file.name}...")
             
-            # Check if file was previously synced
+            # Check if file was previously synced (for update)
             file_key = str(file.relative_to(dir_path))
-            existing_page_id = synced_files.get(file_key, {}).get("page_id") if not skip_existing else None
+            existing_page_id = None
+            
+            if file_key in synced_files:
+                # File exists in sync records - update it
+                existing_page_id = synced_files[file_key].get("page_id")
+                if existing_page_id:
+                    logger.info(f"    (Updating existing page)")
             
             result = await self.sync_file(
                 str(file),
