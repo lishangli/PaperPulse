@@ -1673,5 +1673,180 @@ def notion_cleanup_cmd(ctx: click.Context, dry_run: bool):
         click.echo(f"❌ Error: {e}")
         sys.exit(1)
 
+
+
+@main.command("auto-research")
+@click.option("--dry-run", is_flag=True, help="Preview without executing")
+@click.option("--skip-collection", is_flag=True, help="Skip paper collection (use existing)")
+@click.option("--skip-ideas", is_flag=True, help="Skip idea generation")
+@click.option("--skip-experiment", is_flag=True, help="Skip AutoResearchClaw experiment")
+@click.option("--min-score", "-s", default=0.7, help="Minimum idea score for experiment")
+@click.option("--max-experiments", default=1, help="Maximum experiments to run")
+@click.pass_context
+def auto_research_cmd(
+    ctx: click.Context,
+    dry_run: bool,
+    skip_collection: bool,
+    skip_ideas: bool,
+    skip_experiment: bool,
+    min_score: float,
+    max_experiments: int,
+):
+    """Complete daily research automation pipeline.
+
+    Full pipeline:
+    1. Collect papers (domain-weighted)
+    2. Download & convert to Markdown
+    3. Generate synthesis reports
+    4. Sync to Notion
+    5. Generate research ideas
+    6. Check feasibility (GPU, environment)
+    7. Run AutoResearchClaw experiment
+
+    Usage:
+        paperpulse auto-research                 # Full pipeline
+        paperpulse auto-research --dry-run       # Preview only
+        paperpulse auto-research --skip-collection  # Use existing papers
+        paperpulse auto-research --skip-experiment   # Stop before experiment
+    """
+    import subprocess
+    import time
+
+    config = ctx.obj["config"]
+    db = ctx.obj["db"]
+
+    click.echo("\n" + "="*60)
+    click.echo("  🔬 PaperPulse + AutoResearchClaw Daily Research")
+    click.echo("="*60 + "\n")
+
+    if dry_run:
+        click.echo("📋 DRY RUN - Preview mode\n")
+        click.echo("Pipeline steps:")
+        click.echo("  1. Collect papers (10 papers, domain-weighted)")
+        click.echo("  2. Download & convert to Markdown")
+        click.echo("  3. Generate synthesis reports")
+        click.echo("  4. Sync to Notion")
+        click.echo("  5. Generate research ideas (5 ideas)")
+        click.echo("  6. Check feasibility")
+        click.echo("  7. Run AutoResearchClaw (top idea)")
+        click.echo("\n💡 Run without --dry-run to execute")
+        return
+
+    # ========================================
+    # Phase 1: Paper Collection & Analysis
+    # ========================================
+    if not skip_collection:
+        click.echo("\n[Phase 1] Paper Collection & Analysis\n")
+        
+        # Invoke auto-daily command
+        ctx.invoke(auto_daily)
+    else:
+        click.echo("\n[Phase 1] Skipping collection (using existing papers)\n")
+
+    # ========================================
+    # Phase 2: Sync to Notion
+    # ========================================
+    click.echo("\n[Phase 2] Sync to Notion\n")
+    
+    reports_dir = config.storage.reports_dir
+    if reports_dir.exists():
+        # Invoke notion sync
+        notion_ctx = click.Context(notion_sync_cmd, parent=ctx)
+        notion_ctx.invoke(notion_sync_cmd, path=str(reports_dir / "synthesis"))
+
+    # ========================================
+    # Phase 3: Generate Ideas
+    # ========================================
+    if not skip_ideas:
+        click.echo("\n[Phase 3] Generate Research Ideas\n")
+        
+        # Invoke ideas command
+        ctx.invoke(ideas, num=5)
+    else:
+        click.echo("\n[Phase 3] Skipping idea generation\n")
+
+    # ========================================
+    # Phase 4: Feasibility Check
+    # ========================================
+    click.echo("\n[Phase 4] Feasibility Check\n")
+
+    # Check GPU
+    gpu_available = False
+    gpu_info = "Not available"
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            gpu_available = True
+            gpu_info = result.stdout.strip()
+            click.echo(f"  ✅ GPU: {gpu_info}")
+        else:
+            click.echo("  ⚠️  GPU: Not available")
+    except Exception:
+        click.echo("  ⚠️  GPU: Not available")
+
+    # Check AutoResearchClaw
+    researchclaw_path = Path(config.integration.researchclaw.path)
+    if researchclaw_path.exists():
+        click.echo(f"  ✅ AutoResearchClaw: {researchclaw_path}")
+    else:
+        click.echo("  ⚠️  AutoResearchClaw: Not found")
+        skip_experiment = True
+
+    # Check Python/uv
+    click.echo(f"  ✅ Python: {subprocess.run(['python3', '--version'], capture_output=True, text=True).stdout.strip()}")
+
+    # ========================================
+    # Phase 5: Run AutoResearchClaw
+    # ========================================
+    if not skip_experiment:
+        click.echo("\n[Phase 5] AutoResearchClaw Experiment\n")
+
+        # Get top ideas
+        top_ideas = db.get_top_ideas(limit=10)
+        feasible_ideas = [i for i in top_ideas if i.score >= min_score and not i.is_researched]
+
+        if not feasible_ideas:
+            click.echo("  ⚠️  No feasible ideas found (score >= {})".format(min_score))
+            click.echo("  💡 Run with lower --min-score or generate more ideas")
+        else:
+            click.echo(f"  💡 Found {len(feasible_ideas)} feasible ideas")
+            
+            # Run experiments
+            for i, idea in enumerate(feasible_ideas[:max_experiments]):
+                click.echo(f"\n  Experiment {i+1}/{max_experiments}:")
+                click.echo(f"    Idea: {idea.title[:50]}...")
+                click.echo(f"    Score: {idea.score:.2f}")
+                
+                # Invoke research command
+                success, msg = ctx.invoke(research_cmd, idea_id=idea.idea_id)
+                
+                if success:
+                    click.echo(f"    ✅ Experiment completed: {msg}")
+                else:
+                    click.echo(f"    ❌ Experiment failed: {msg}")
+
+    # ========================================
+    # Summary
+    # ========================================
+    click.echo("\n" + "="*60)
+    click.echo("  ✅ Daily Research Complete")
+    click.echo("="*60 + "\n")
+
+    # Get stats
+    papers = db.get_papers(limit=100)
+    analyzed = [p for p in papers if p.keywords or p.innovations]
+    ideas_list = db.get_top_ideas(limit=20)
+    researched = [i for i in ideas_list if i.is_researched]
+
+    click.echo(f"Papers collected: {len(papers)}")
+    click.echo(f"Papers analyzed: {len(analyzed)}")
+    click.echo(f"Ideas generated: {len(ideas_list)}")
+    click.echo(f"Experiments run: {len(researched)}")
+
+
+
 if __name__ == "__main__":
     main()
